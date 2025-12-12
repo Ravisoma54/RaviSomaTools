@@ -1,163 +1,379 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>RaviSomaTools – Gene ID Resolver</title>
-
+<meta charset="utf-8" />
+<title>RaviSomaTools — Bulk Gene ID Resolver</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
-body {
-    background: #ff4db8;
-    font-family: Arial, sans-serif;
-    padding: 20px;
-    color: #000;
-}
-.container {
-    width: 450px;
-    padding: 20px;
-    background: #ff79cd;
-    border-radius: 10px;
-    box-shadow: 0 0 10px #0003;
-}
-input, select, button {
-    width: 95%;
-    padding: 10px;
-    margin: 6px 0;
-    border-radius: 6px;
-    border: 1px solid #444;
-    font-size: 16px;
-}
-button {
-    background: #000;
-    color: #fff;
-    cursor: pointer;
-}
-button:hover {
-    opacity: 0.8;
-}
-label { font-weight: bold; }
-.result-box {
-    background: #ffe6f5;
-    padding: 10px;
-    margin-top: 10px;
-    border-radius: 6px;
-    font-size: 14px;
-}
+:root{--bg:#ff4db8;--card:#ff79cd;--panel:#ffe6f5;--black:#000}
+body{margin:0;font-family:Inter,Arial,system-ui,sans-serif;background:var(--bg);color:var(--black)}
+.container{max-width:1100px;margin:24px;padding:20px;border-radius:10px;background:transparent;display:flex;gap:20px}
+.left{width:420px}
+.card{background:var(--card);padding:18px;border-radius:10px;box-shadow:0 4px 18px rgba(0,0,0,.12)}
+h1{margin:0 0 12px;font-size:22px}
+label{display:block;margin-top:12px;font-weight:600}
+textarea,input,select,button{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #444;font-size:14px}
+textarea{min-height:140px;resize:vertical}
+small{display:block;color:#222;margin-top:6px}
+.row{display:flex;gap:10px;align-items:center}
+.btn{background:#000;color:#fff;border:0;padding:10px 12px;border-radius:8px;cursor:pointer}
+.progress-wrap{margin-top:12px;background:#ffd1e8;padding:8px;border-radius:8px}
+.progress{height:14px;background:#ffdfe9;border-radius:8px;overflow:hidden}
+.progress>div{height:100%;background:#000;width:0%}
+.table-wrap{flex:1;min-width:420px}
+.table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden}
+.table th,.table td{padding:8px;border:1px solid #eee;font-size:13px;text-align:left}
+.status-ok{color:green;font-weight:700}
+.status-fail{color:#b30000;font-weight:700}
+.controls{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.small{font-size:12px;color:#222}
+.footer-note{margin-top:10px;font-size:13px;color:#222}
+.file-input{padding:6px}
+.note{background:var(--panel);padding:8px;margin-top:10px;border-radius:8px}
 </style>
-
-<script>
-// ========== UniProt lookup ==========
-async function fetchUniProt(gene, species) {
-    const url = `https://rest.uniprot.org/uniprotkb/search?query=gene_exact:${gene}+AND+organism_name:${species}&format=json`;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return "";
-        const json = await res.json();
-        if (json.results && json.results.length > 0)
-            return json.results[0].primaryAccession;
-    } catch(e) {
-        console.log("UniProt error", e);
-    }
-    return "";
-}
-
-// ========== NCBI Entrez lookup ==========
-async function fetchEntrez(gene, species) {
-    const query = encodeURIComponent(gene + " " + species);
-    const url = `https://api.ncbi.nlm.nih.gov/datasets/v2/gene/suggest?query=${query}`;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return "";
-        const json = await res.json();
-        if (json.suggestions && json.suggestions.length > 0 && json.suggestions[0].gene_id)
-            return json.suggestions[0].gene_id;
-    } catch(e) {
-        console.log("Entrez error", e);
-    }
-    return "";
-}
-
-// ========== Ensembl lookup ==========
-async function fetchEnsembl(gene, species="rattus_norvegicus") {
-    const url = `https://rest.ensembl.org/xrefs/symbol/${species}/${gene}?content-type=application/json`;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return "";
-        const json = await res.json();
-        if (json && json.length > 0 && json[0].id)
-            return json[0].id;
-    } catch(e) {
-        console.log("Ensembl error", e);
-    }
-    return "";
-}
-
-// ========== GO FUNCTION ==========
-async function goLookup() {
-
-    const gene = document.getElementById("gene").value.trim();
-    const speciesHuman = document.getElementById("species").value;
-
-    const speciesMap = {
-        "Rattus norvegicus": "rattus_norvegicus",
-        "Homo sapiens": "homo_sapiens",
-        "Mus musculus": "mus_musculus"
-    };
-    const ensemblSpecies = speciesMap[speciesHuman] || "rattus_norvegicus";
-
-    if (!gene) {
-        alert("Enter a Gene Symbol first.");
-        return;
-    }
-
-    document.getElementById("result").innerHTML = "Fetching data...";
-
-    const uni = await fetchUniProt(gene, speciesHuman);
-    const ensg = await fetchEnsembl(gene, ensemblSpecies);
-    const entrez = await fetchEntrez(gene, speciesHuman);
-
-    document.getElementById("uniprot").value = uni;
-    document.getElementById("ensembl").value = ensg;
-    document.getElementById("entrez").value = entrez;
-
-    document.getElementById("result").innerHTML = `
-        <b>Lookup Complete</b><br>
-        Gene: ${gene}<br>
-        UniProt: ${uni || "Not found"}<br>
-        Ensembl: ${ensg || "Not found"}<br>
-        Entrez: ${entrez || "Not found"}<br>
-    `;
-}
-</script>
 </head>
-
 <body>
-
 <div class="container">
-    <h2><b>RaviSomaTools – Gene ID Resolver</b></h2>
+  <div class="left">
+    <div class="card">
+      <h1>RaviSomaTools — Bulk Gene ID Resolver</h1>
 
-    <label>Gene Symbol</label>
-    <input id="gene" placeholder="e.g., Cyp2d3">
-
-    <label>Species</label>
-    <select id="species">
-        <option>Rattus norvegicus</option>
+      <label>Species</label>
+      <select id="species">
+        <option selected>Rattus norvegicus</option>
         <option>Homo sapiens</option>
         <option>Mus musculus</option>
-    </select>
+      </select>
 
-    <label>UniProt ID</label>
-    <input id="uniprot" placeholder="Will auto-fill">
+      <label>Paste gene symbols (one per line)</label>
+      <textarea id="genesArea" placeholder="Cyp1a1&#10;Cyp1a2&#10;Cyp2d1"></textarea>
+      <small>Or upload CSV with a column named <code>Gene</code> or <code>gene</code>.</small>
 
-    <label>Ensembl Gene ID</label>
-    <input id="ensembl" placeholder="Will auto-fill">
+      <label>Upload CSV</label>
+      <input id="fileInput" type="file" accept=".csv,.txt" class="file-input"/>
 
-    <label>NCBI Entrez Gene ID</label>
-    <input id="entrez" placeholder="Will auto-fill">
+      <div class="controls">
+        <button id="startBtn" class="btn">Start Lookup</button>
+        <button id="stopBtn" class="btn" style="background:#7a0000">Stop</button>
+        <button id="clearCache" class="btn" style="background:#444">Clear cache</button>
+      </div>
 
-    <button onclick="goLookup()">GO</button>
+      <div class="note small">
+        <b>Features:</b> batching, caching (localStorage), retry/backoff, CSV/XLSX export.
+      </div>
 
-    <div id="result" class="result-box"></div>
+      <div class="progress-wrap">
+        <div id="progressInfo" class="small">Idle</div>
+        <div class="progress" style="margin-top:6px"><div id="progressBar"></div></div>
+      </div>
+
+      <div class="footer-note">
+        <span class="small">Tip: For >200 genes run in small batches (the tool will throttle automatically).</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><strong>Results</strong></div>
+        <div style="display:flex;gap:8px">
+          <button id="downloadCSV" class="btn" style="background:#006600">Download CSV</button>
+          <button id="downloadXLSX" class="btn" style="background:#004d99">Download XLSX</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;max-height:520px;overflow:auto">
+        <table class="table" id="resultTable">
+          <thead><tr>
+            <th>#</th><th>Gene</th><th>UniProt AC</th><th>Ensembl Gene</th><th>Entrez ID</th><th>Status</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <strong>Activity log</strong>
+      <div id="log" style="margin-top:8px;max-height:160px;overflow:auto;font-size:13px"></div>
+    </div>
+  </div>
 </div>
 
+<!-- SheetJS (for XLSX export) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+// ----------------- Utility functions -----------------
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function csvEscape(s){ if(s===null||s===undefined) return ""; return (`${s}`).replace(/"/g,'""'); }
+function downloadText(filename, text){ const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(text); a.download=filename; a.click(); }
+function downloadBlob(filename, blob){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); URL.revokeObjectURL(a.href); }
+function now(){ return new Date().toISOString().replace('T',' ').replace(/\.\d+Z/,''); }
+
+// ----------------- Config -----------------
+const CONFIG = {
+  delayMs: 350,         // default delay between API calls (polite)
+  batchDelayMs: 1000,   // delay between batches
+  maxRetries: 3,
+  backoffBase: 800      // backoff multiplier
+};
+
+// ----------------- Caching -----------------
+const CACHE_KEY = 'RaviSoma_cache_v1';
+let cache = {};
+try{ cache = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); }catch(e){ cache = {}; }
+
+// ----------------- DOM references -----------------
+const genesArea = $('genesArea');
+const fileInput = $('fileInput');
+const startBtn = $('startBtn');
+const stopBtn = $('stopBtn');
+const clearCacheBtn = $('clearCache');
+const progressBar = $('progressBar');
+const progressInfo = $('progressInfo');
+const resultTableBody = document.querySelector('#resultTable tbody');
+const logDiv = $('log');
+const downloadCSVBtn = $('downloadCSV');
+const downloadXLSXBtn = $('downloadXLSX');
+const speciesEl = $('species');
+
+let STOP_FLAG = false;
+let results = [];
+
+// ----------------- Logging -----------------
+function log(msg){
+  const p = document.createElement('div');
+  p.textContent = `[${now()}] ${msg}`;
+  logDiv.prepend(p);
+}
+
+// ----------------- API helper functions -----------------
+async function fetchUniProt(gene, species){
+  // Search UniProt REST for the gene in given species name
+  const q = `gene_exact:${encodeURIComponent(gene)} AND organism_name:${encodeURIComponent(species)}`;
+  const url = `https://rest.uniprot.org/uniprotkb/search?query=${q}&format=json&fields=primaryAccession`;
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('UniProt HTTP '+res.status);
+    const js = await res.json();
+    if(js.results && js.results.length>0) return js.results[0].primaryAccession || "";
+  }catch(e){
+    // ignore here; caller handles retries
+    throw e;
+  }
+  return "";
+}
+
+async function fetchEnsembl(gene, speciesKey){
+  // speciesKey e.g. 'rattus_norvegicus'
+  const url = `https://rest.ensembl.org/xrefs/symbol/${speciesKey}/${encodeURIComponent(gene)}?content-type=application/json`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('Ensembl HTTP '+res.status);
+  const js = await res.json();
+  if(js && js.length>0){
+    // prefer entries of type 'gene' or first id
+    const g = js.find(x=>x.dbtype==='gene') || js[0];
+    return g.id || "";
+  }
+  return "";
+}
+
+async function fetchEntrez(gene, species){
+  // Use NCBI datasets suggestions endpoint (lightweight)
+  const query = encodeURIComponent(`${gene} ${species}`);
+  const url = `https://api.ncbi.nlm.nih.gov/datasets/v2/gene/suggest?query=${query}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('NCBI HTTP '+res.status);
+  const js = await res.json();
+  if(js.suggestions && js.suggestions.length>0 && js.suggestions[0].gene_id){
+    return String(js.suggestions[0].gene_id);
+  }
+  return "";
+}
+
+// safe wrapper with retries and backoff
+async function safeCall(fn, args, label){
+  let attempt=0;
+  while(attempt<=CONFIG.maxRetries){
+    try{
+      const val = await fn(...args);
+      return {ok:true, value: val};
+    }catch(e){
+      attempt++;
+      const wait = CONFIG.backoffBase * attempt;
+      log(`${label} error (${e.message}). retry ${attempt} after ${wait}ms`);
+      await sleep(wait);
+    }
+  }
+  return {ok:false, error:`Failed after ${CONFIG.maxRetries} attempts`};
+}
+
+// map human species name to Ensembl style
+function ensemblSpeciesMap(name){
+  const m = {'Rattus norvegicus':'rattus_norvegicus','Homo sapiens':'homo_sapiens','Mus musculus':'mus_musculus'};
+  return m[name] || 'rattus_norvegicus';
+}
+
+// ----------------- UI / Table management -----------------
+function resetResults(){
+  results = [];
+  resultTableBody.innerHTML = '';
+  progressBar.style.width = '0%';
+  progressInfo.textContent = 'Idle';
+}
+
+function addRow(idx, gene){
+  const tr = document.createElement('tr');
+  tr.id = `row-${idx}`;
+  tr.innerHTML = `<td>${idx+1}</td><td>${gene}</td><td class="uni">-</td><td class="ens">-</td><td class="ent">-</td><td class="status">Pending</td>`;
+  resultTableBody.appendChild(tr);
+}
+
+function updateRow(idx, uni, ens, ent, status){
+  const tr = document.getElementById(`row-${idx}`);
+  if(!tr) return;
+  tr.querySelector('.uni').textContent = uni || '';
+  tr.querySelector('.ens').textContent = ens || '';
+  tr.querySelector('.ent').textContent = ent || '';
+  const st = tr.querySelector('.status');
+  st.textContent = status;
+  st.className = 'status ' + (status.toLowerCase().includes('ok') ? 'status-ok' : 'status-fail');
+}
+
+// ----------------- Bulk processing -----------------
+function parseGenesFromText(txt){
+  return txt.split(/\r?\n/).map(s=>s.trim()).filter(s=>s.length>0);
+}
+
+function parseCSVFileContent(text){
+  // simple CSV parser: look for header 'gene' or 'Gene'; if none, use first column
+  const rows = text.split(/\r?\n/).map(r=>r.trim()).filter(r=>r.length>0);
+  if(rows.length===0) return [];
+  const cols = rows[0].split(',');
+  const header = cols.map(c=>c.replace(/["']/g,'').trim().toLowerCase());
+  if(header.includes('gene')){
+    const idx = header.indexOf('gene');
+    return rows.slice(1).map(r=>r.split(',')[idx].replace(/["']/g,'').trim()).filter(Boolean);
+  } else {
+    // fallback: first column
+    return rows.map(r=>r.split(',')[0].replace(/["']/g,'').trim()).filter(Boolean);
+  }
+}
+
+async function processList(geneList, speciesName){
+  STOP_FLAG=false;
+  resetResults();
+  const total = geneList.length;
+  for(let i=0;i<total;i++){
+    if(STOP_FLAG) { log('Process stopped by user'); progressInfo.textContent='Stopped by user'; break; }
+    const gene = geneList[i];
+    addRow(i, gene);
+    // progress
+    progressInfo.textContent = `Processing ${i+1}/${total} (${gene})`;
+    progressBar.style.width = `${Math.round((i/total)*100)}%`;
+
+    // check cache
+    const cacheKey = `${gene}__${speciesName}`;
+    if(cache[cacheKey]){
+      const c = cache[cacheKey];
+      updateRow(i, c.uni || '', c.ens || '', c.ent || '', 'OK (cached)');
+      results.push({Gene:gene, UniProt:c.uni, Ensembl:c.ens, Entrez:c.ent, Status:'OK (cached)'});
+      log(`Cached: ${gene}`);
+      await sleep(100); // tiny delay
+      continue;
+    }
+
+    // perform lookups sequentially (UniProt, Ensembl, Entrez) with safeCall
+    const ensemblSpecies = ensemblSpeciesMap(speciesName);
+
+    // UniProt
+    const uniRes = await safeCall(fetchUniProt, [gene, speciesName], `UniProt ${gene}`);
+    await sleep(CONFIG.delayMs);
+    // Ensembl
+    const ensRes = await safeCall(fetchEnsembl, [gene, ensemblSpecies], `Ensembl ${gene}`);
+    await sleep(CONFIG.delayMs);
+    // Entrez
+    const entRes = await safeCall(fetchEntrez, [gene, speciesName], `Entrez ${gene}`);
+    await sleep(CONFIG.delayMs);
+
+    const uni = uniRes.ok ? uniRes.value : '';
+    const ens = ensRes.ok ? ensRes.value : '';
+    const ent = entRes.ok ? entRes.value : '';
+
+    const ok = (uni || ens || ent);
+    if(ok){
+      updateRow(i, uni||'', ens||'', ent||'', 'OK');
+      results.push({Gene:gene, UniProt:uni||'', Ensembl:ens||'', Entrez:ent||'', Status:'OK'});
+      cache[cacheKey] = {uni, ens, ent, ts: Date.now()};
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+      log(`Resolved: ${gene}`);
+    } else {
+      updateRow(i, '', '', '', 'Failed');
+      results.push({Gene:gene, UniProt:'', Ensembl:'', Entrez:'', Status:'Failed'});
+      log(`Failed: ${gene}`);
+    }
+
+    // small batch delay every 20 queries
+    if((i+1)%20===0) await sleep(CONFIG.batchDelayMs);
+  }
+
+  progressBar.style.width = '100%';
+  progressInfo.textContent = `Done (${results.length} results)`;
+  log('Bulk process finished');
+}
+
+// ----------------- File handlers -----------------
+fileInput.addEventListener('change', async (ev)=>{
+  const f = ev.target.files[0];
+  if(!f) return;
+  const text = await f.text();
+  const genes = parseCSVFileContent(text);
+  if(genes.length===0) return alert('No genes found in CSV');
+  genesArea.value = genes.join('\n');
+  log(`Loaded ${genes.length} genes from file ${f.name}`);
+});
+
+// ----------------- Controls events -----------------
+startBtn.addEventListener('click', async ()=>{
+  const txt = genesArea.value.trim();
+  if(!txt) return alert('Paste gene symbols or upload CSV first');
+  const geneList = parseGenesFromText(txt);
+  if(geneList.length===0) return alert('No genes found');
+  // optional confirmation for large lists
+  if(geneList.length>800 && !confirm('You are about to lookup '+geneList.length+' genes. This may take a long time and hit API limits. Continue?')) return;
+  const speciesName = speciesEl.value;
+  await processList(geneList, speciesName);
+});
+
+stopBtn.addEventListener('click', ()=>{ STOP_FLAG=true; log('User requested stop'); });
+
+clearCacheBtn.addEventListener('click', ()=>{ if(confirm('Clear local cache?')){ cache={}; localStorage.removeItem(CACHE_KEY); log('Cache cleared'); }});
+
+// ----------------- Export -----------------
+downloadCSVBtn.addEventListener('click', ()=>{
+  if(results.length===0) return alert('No results yet');
+  const header = ['Gene','UniProt','Ensembl','Entrez','Status'];
+  const lines = [header.join(',')].concat(results.map(r=>`${csvEscape(r.Gene)},${csvEscape(r.UniProt)},${csvEscape(r.Ensembl)},${csvEscape(r.Entrez)},${csvEscape(r.Status)}`));
+  downloadText(`RaviSomaTools_results_${Date.now()}.csv`, lines.join('\n'));
+});
+
+downloadXLSXBtn.addEventListener('click', ()=>{
+  if(results.length===0) return alert('No results yet');
+  const wb = XLSX.utils.book_new();
+  const wsdata = [ ['Gene','UniProt','Ensembl','Entrez','Status'] ].concat(results.map(r=>[r.Gene, r.UniProt, r.Ensembl, r.Entrez, r.Status]));
+  const ws = XLSX.utils.aoa_to_sheet(wsdata);
+  XLSX.utils.book_append_sheet(wb, ws, 'results');
+  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  const blob = new Blob([wbout], {type:'application/octet-stream'});
+  downloadBlob(`RaviSomaTools_results_${Date.now()}.xlsx`, blob);
+});
+
+// ----------------- Init -----------------
+resetResults();
+log('Tool ready. Default species: Rattus norvegicus');
+
+</script>
 </body>
 </html>
