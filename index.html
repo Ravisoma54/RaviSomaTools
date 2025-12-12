@@ -27,7 +27,6 @@ textarea{min-height:120px;resize:vertical}
 .status-fail{color:#b30000;font-weight:700}
 .log{max-height:200px;overflow:auto;margin-top:8px;background:#fff;padding:8px;border-radius:6px}
 .note{background:var(--panel);padding:8px;margin-top:10px;border-radius:8px}
-.example-box{background:#fff3fb;padding:10px;border-radius:8px;margin-top:10px}
 .example-controls{display:flex;gap:8px;margin-top:8px}
 footer{margin-top:12px;color:#111;font-size:13px}
 .badge{display:inline-block;padding:4px 8px;background:#fff;color:#000;border-radius:6px;font-weight:700}
@@ -39,8 +38,9 @@ footer{margin-top:12px;color:#111;font-size:13px}
     <div class="card">
       <h1>RaviSomaTools — Bulk Gene ID Resolver</h1>
 
-      <label>Species (default: <span class="badge">Rattus norvegicus</span>)</label>
+      <label>Species</label>
       <select id="species">
+        <option value="">-- select species --</option>
         <option value="rat">Rattus norvegicus</option>
         <option value="human">Homo sapiens</option>
         <option value="mouse">Mus musculus</option>
@@ -54,15 +54,7 @@ footer{margin-top:12px;color:#111;font-size:13px}
       <input id="fileInput" type="file" accept=".csv,.txt"/>
 
       <div style="margin-top:12px">
-        <strong>Examples (all 3 UX types included)</strong>
-        <div class="example-controls">
-          <!-- Buttons -->
-          <button class="btn" id="loadRatBtn">Load rat example</button>
-          <button class="btn" id="loadMouseBtn">Load mouse example</button>
-          <button class="btn" id="loadHumanBtn">Load human example</button>
-        </div>
-
-        <!-- Dropdown -->
+        <strong>Examples</strong>
         <div style="margin-top:8px">
           <label class="small">Quick select example set</label>
           <select id="exampleSelect">
@@ -75,18 +67,6 @@ footer{margin-top:12px;color:#111;font-size:13px}
             <button class="btn" id="useSelectedExample">Use selected example</button>
           </div>
         </div>
-
-        <!-- Example box -->
-        <div class="example-box" id="exampleBox">
-          <strong>Example (Rat) — quick preview</strong>
-          <div style="margin-top:8px;font-size:13px">
-            Cyp1a1, Cyp1a2, Cyp2a1, Cyp2b1, Cyp2c6, Cyp2d1, Cyp2e1
-          </div>
-          <div style="margin-top:8px">
-            <button class="btn" id="useExampleBox">Use this example</button>
-            <a id="downloadExampleCsv" href="#" style="margin-left:8px" class="small">Download example CSV</a>
-          </div>
-        </div>
       </div>
 
       <div class="controls">
@@ -96,14 +76,11 @@ footer{margin-top:12px;color:#111;font-size:13px}
       </div>
 
       <div class="note small">
-        <b>Scientific names & notes:</b>
         <div style="margin-top:6px">
-          The scientific names follow binomial nomenclature (genus capitalized, species lowercase, both typically italicized):
-          <ul>
-            <li><b>Rat</b>: <i>Rattus norvegicus</i> (brown / Norway rat) — common lab species. (Also <i>Rattus rattus</i> is the black rat.)</li>
-            <li><b>Mouse</b>: <i>Mus musculus</i> (house mouse).</li>
-            <li><b>Human</b>: <i>Homo sapiens</i>.</li>
-          </ul>
+          Prepared by Ravi Adinarayan Somabattini<br>
+          Rat: Rattus norvegicus (brown / Norway rat) — common lab species. (Also Rattus rattus is the black rat.)<br>
+          Mouse: Mus musculus (house mouse).<br>
+          Human: Homo sapiens.
         </div>
       </div>
 
@@ -145,7 +122,7 @@ footer{margin-top:12px;color:#111;font-size:13px}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
-// -------------------- Config and species --------------------
+// -------------------- Config and examples --------------------
 const EXAMPLES = {
   rat: ["Cyp1a1","Cyp1a2","Cyp2a1","Cyp2b1","Cyp2c6","Cyp2d1","Cyp2e1","Cyp3a1","Cyp3a2","Cyp4a1"],
   mouse: ["Cyp1a1","Cyp2d22","Cyp2e1","Cyp3a11","Cyp2c29","Cyp2b10","Cyp2f2"],
@@ -159,7 +136,7 @@ const ORG = {
 };
 
 const CONFIG = { delayMs: 300, batchDelayMs: 1000, maxRetries: 3, backoffBase: 700 };
-const CACHE_KEY = 'RaviSoma_cache_v3';
+const CACHE_KEY = 'RaviSoma_cache_v4';
 let cache = {}; try{ cache = JSON.parse(localStorage.getItem(CACHE_KEY)||'{}'); }catch(e){ cache = {}; }
 
 // -------------------- Helpers --------------------
@@ -173,19 +150,13 @@ const genesArea = $('genesArea'), fileInput = $('fileInput'), startBtn = $('star
 const clearCacheBtn = $('clearCache'), progressBar = $('progressBar'), progressInfo = $('progressInfo');
 const resultTableBody = document.querySelector('#resultTable tbody');
 const downloadCSVBtn = $('downloadCSV'), downloadXLSXBtn = $('downloadXLSX');
-const speciesEl = $('species');
-
-// example controls
-const loadRatBtn = $('loadRatBtn'), loadMouseBtn = $('loadMouseBtn'), loadHumanBtn = $('loadHumanBtn');
-const exampleSelect = $('exampleSelect'), useSelectedExample = $('useSelectedExample'), exampleBox = $('exampleBox');
-const useExampleBox = $('useExampleBox'), downloadExampleCsv = $('downloadExampleCsv');
+const speciesEl = $('species'), exampleSelect = $('exampleSelect'), useSelectedExample = $('useSelectedExample');
 
 let STOP_FLAG = false, results = [];
 
-// -------------------- API wrappers --------------------
-async function uniProtLookup(gene, uniprotOrgId){
-  const q = `gene_exact:${encodeURIComponent(gene)} AND organism_id:${uniprotOrgId}`;
-  const url = `https://rest.uniprot.org/uniprotkb/search?query=${q}&format=json&fields=primaryAccession`;
+// -------------------- UniProt lookup (improved) --------------------
+async function uniProtQuery(gene, uniprotOrgId, queryStr){
+  const url = `https://rest.uniprot.org/uniprotkb/search?query=${queryStr}&format=json&fields=primaryAccession`;
   const res = await fetch(url);
   if(!res.ok) throw new Error('UniProt HTTP '+res.status);
   const js = await res.json();
@@ -193,6 +164,40 @@ async function uniProtLookup(gene, uniprotOrgId){
   return "";
 }
 
+async function uniProtLookup(gene, uniprotOrgId, speciesKey){
+  // Try 1: exact gene name query (gene_exact)
+  let q1 = `gene_exact:${encodeURIComponent(gene)} AND organism_id:${uniprotOrgId}`;
+  try{
+    const v1 = await uniProtQuery(gene, uniprotOrgId, q1);
+    if(v1) return v1;
+  }catch(e){ log(`UniProt try1 error: ${e.message}`); }
+
+  // Try 2: generic gene field (handles casing differences)
+  let q2 = `gene:${encodeURIComponent(gene)} AND organism_id:${uniprotOrgId}`;
+  try{
+    const v2 = await uniProtQuery(gene, uniprotOrgId, q2);
+    if(v2) return v2;
+  }catch(e){ log(`UniProt try2 error: ${e.message}`); }
+
+  // Try 3: alternate casing strategies
+  const altCases = [];
+  // If gene looks like camel/lower (rat), try upper-case
+  if(/[a-z]/.test(gene) && /[A-Z]/.test(gene)===false) altCases.push(gene.toUpperCase());
+  // If gene looks uppercase, try lowercase (rat)
+  if(gene===gene.toUpperCase()) altCases.push(gene.toLowerCase());
+  for(const alt of altCases){
+    try{
+      const q = `gene_exact:${encodeURIComponent(alt)} AND organism_id:${uniprotOrgId}`;
+      const vv = await uniProtQuery(alt, uniprotOrgId, q);
+      if(vv) return vv;
+    }catch(e){ /*ignore*/ }
+  }
+
+  // No result
+  return "";
+}
+
+// -------------------- Ensembl & NCBI --------------------
 async function ensemblLookup(gene, ensemblSpeciesKey){
   const url = `https://rest.ensembl.org/xrefs/symbol/${ensemblSpeciesKey}/${encodeURIComponent(gene)}?content-type=application/json`;
   const res = await fetch(url);
@@ -215,6 +220,7 @@ async function ncbiEntrezLookup(gene, taxid){
   return "";
 }
 
+// -------------------- safe wrapper --------------------
 async function safeCall(fn, args, label){
   for(let attempt=0; attempt<=CONFIG.maxRetries; attempt++){
     try{
@@ -222,14 +228,13 @@ async function safeCall(fn, args, label){
       return {ok:true, value:v};
     }catch(e){
       log(`${label} error: ${e.message} (attempt ${attempt+1})`);
-      if(attempt < CONFIG.maxRetries){
-        await sleep(CONFIG.backoffBase * (attempt+1));
-      } else return {ok:false, error:e.message};
+      if(attempt < CONFIG.maxRetries) await sleep(CONFIG.backoffBase * (attempt+1));
+      else return {ok:false, error:e.message};
     }
   }
 }
 
-// -------------------- UI table helpers --------------------
+// -------------------- UI helpers --------------------
 function resetTable(){ results=[]; resultTableBody.innerHTML=''; progressBar.style.width='0%'; progressInfo.textContent='Idle'; }
 function addRow(i,gene){ const tr=document.createElement('tr'); tr.id=`row-${i}`; tr.innerHTML=`<td>${i+1}</td><td>${gene}</td><td class="uni">-</td><td class="ens">-</td><td class="ent">-</td><td class="status">Pending</td>`; resultTableBody.appendChild(tr); }
 function updateRow(i, uni, ens, ent, status){ const tr=document.getElementById(`row-${i}`); if(!tr) return; tr.querySelector('.uni').textContent = uni||''; tr.querySelector('.ens').textContent = ens||''; tr.querySelector('.ent').textContent = ent||''; const st = tr.querySelector('.status'); st.textContent = status; st.className = 'status ' + (status.toLowerCase().includes('ok') ? 'status-ok' : 'status-fail'); }
@@ -245,25 +250,47 @@ function parseCSVFileContent(text){
   return rows.map(r=>r.split(',')[0].replace(/["']/g,'').trim()).filter(Boolean);
 }
 
-// -------------------- Bulk processor --------------------
+// -------------------- Bulk processing --------------------
 async function processList(geneList, speciesKey){
   STOP_FLAG=false; resetTable();
   const total = geneList.length;
+  if(!speciesKey){ alert('Please select a species first'); return; }
   for(let i=0;i<total;i++){
     if(STOP_FLAG){ log('Process stopped by user'); progressInfo.textContent='Stopped'; break; }
     const gene = geneList[i]; addRow(i,gene);
     progressInfo.textContent = `Processing ${i+1}/${total}: ${gene}`; progressBar.style.width = `${Math.round((i/total)*100)}%`;
     const cacheKey = `${gene}||${speciesKey}`;
-    if(cache[cacheKey]){ const c=cache[cacheKey]; updateRow(i,c.uni||'',c.ens||'',c.ent||'','OK (cached)'); results.push({Gene:gene,UniProt:c.uni||'',Ensembl:c.ens||'',Entrez:c.ent||'',Status:'OK (cached)'}); log(`Cached: ${gene}`); await sleep(80); continue; }
+    if(cache[cacheKey]){ const c = cache[cacheKey]; updateRow(i,c.uni||'',c.ens||'',c.ent||'','OK (cached)'); results.push({Gene:gene,UniProt:c.uni||'',Ensembl:c.ens||'',Entrez:c.ent||'',Status:'OK (cached)'}); log(`Cached: ${gene}`); await sleep(80); continue; }
     const org = ORG[speciesKey];
-    const uniRes = await safeCall(uniProtLookup, [gene, org.uniprotId], `UniProt ${gene}`); await sleep(CONFIG.delayMs);
-    const ensRes = await safeCall(ensemblLookup, [gene, org.ensemblKey], `Ensembl ${gene}`); await sleep(CONFIG.delayMs);
-    const entRes = await safeCall(ncbiEntrezLookup, [gene, org.taxid], `Entrez ${gene}`); await sleep(CONFIG.delayMs);
-    const uniVal = uniRes.ok ? uniRes.value : ''; const ensVal = ensRes.ok ? ensRes.value : ''; const entVal = entRes.ok ? entRes.value : '';
-    if(uniRes.ok || ensRes.ok || entRes.ok){ updateRow(i, uniVal||'', ensVal||'', entVal||'', 'OK'); results.push({Gene:gene,UniProt:uniVal||'',Ensembl:ensVal||'',Entrez:entVal||'',Status:'OK'}); cache[cacheKey]={uni:uniVal||'',ens:ensVal||'',ent:entVal||'',ts:Date.now()}; localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); log(`Resolved: ${gene} (U:${uniVal||'-'} E:${ensVal||'-'} N:${entVal||'-'})`); } else { updateRow(i,'','','','Failed'); results.push({Gene:gene,UniProt:'',Ensembl:'',Entrez:'',Status:'Failed'}); log(`Failed: ${gene}`); }
+
+    // UniProt improved
+    const uniRes = await safeCall(uniProtLookup, [gene, org.uniprotId, speciesKey], `UniProt ${gene}`);
+    await sleep(CONFIG.delayMs);
+    // Ensembl
+    const ensRes = await safeCall(ensemblLookup, [gene, org.ensemblKey], `Ensembl ${gene}`);
+    await sleep(CONFIG.delayMs);
+    // NCBI Entrez
+    const entRes = await safeCall(ncbiEntrezLookup, [gene, org.taxid], `Entrez ${gene}`);
+    await sleep(CONFIG.delayMs);
+
+    const uniVal = uniRes.ok ? uniRes.value : '';
+    const ensVal = ensRes.ok ? ensRes.value : '';
+    const entVal = entRes.ok ? entRes.value : '';
+
+    if(uniRes.ok || ensRes.ok || entRes.ok){
+      updateRow(i, uniVal||'', ensVal||'', entVal||'', 'OK');
+      results.push({Gene:gene,UniProt:uniVal||'',Ensembl:ensVal||'',Entrez:entVal||'',Status:'OK'});
+      cache[cacheKey] = {uni:uniVal||'',ens:ensVal||'',ent:entVal||'',ts:Date.now()};
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+      log(`Resolved: ${gene} (U:${uniVal||'-'} E:${ensVal||'-'} N:${entVal||'-'})`);
+    } else {
+      updateRow(i, '', '', '', 'Failed');
+      results.push({Gene:gene,UniProt:'',Ensembl:'',Entrez:'',Status:'Failed'});
+      log(`Failed: ${gene}`);
+    }
     if((i+1)%20===0) await sleep(CONFIG.batchDelayMs);
   }
-  progressBar.style.width='100%'; progressInfo.textContent=`Done (${results.length} rows)`; log('Bulk finished');
+  progressBar.style.width='100%'; progressInfo.textContent = `Done (${results.length} rows)`; log('Bulk finished');
 }
 
 // -------------------- File upload --------------------
@@ -274,39 +301,33 @@ fileInput.addEventListener('change', async (ev)=>{
 });
 
 // -------------------- Controls --------------------
-$('startBtn').addEventListener('click', async ()=>{
+startBtn.addEventListener('click', async ()=>{
   const txt = genesArea.value.trim(); if(!txt) return alert('Paste gene symbols or upload CSV first');
   const geneList = parseGenesFromText(txt); if(geneList.length===0) return alert('No genes found');
   if(geneList.length>1200 && !confirm(`You are going to lookup ${geneList.length} genes — this may take long and hit rate limits. Continue?`)) return;
-  const speciesKey = speciesEl.value; await processList(geneList, speciesKey);
+  const speciesKey = speciesEl.value; if(!speciesKey) return alert('Please select a species.');
+  await processList(geneList, speciesKey);
 });
-$('stopBtn').addEventListener('click', ()=>{ STOP_FLAG=true; log('User requested stop'); });
-$('clearCache').addEventListener('click', ()=>{ if(confirm('Clear the local cache?')){ cache={}; localStorage.removeItem(CACHE_KEY); log('Cache cleared'); }});
+stopBtn.addEventListener('click', ()=>{ STOP_FLAG=true; log('User requested stop'); });
+clearCacheBtn.addEventListener('click', ()=>{ if(confirm('Clear the local cache?')){ cache={}; localStorage.removeItem(CACHE_KEY); log('Cache cleared'); }});
 
 // -------------------- Export --------------------
 function csvEscape(s){ if(s===null||s===undefined) return ''; return (`${s}`).replace(/"/g,'""'); }
-$('downloadCSV').addEventListener('click', ()=>{
+downloadCSVBtn.addEventListener('click', ()=>{
   if(results.length===0) return alert('No results yet'); const header=['Gene','UniProt','Ensembl','Entrez','Status']; const rows = results.map(r=>[r.Gene,r.UniProt,r.Ensembl,r.Entrez,r.Status]); const csv = [header.join(',')].concat(rows.map(r=>r.map(csvEscape).join(','))).join('\n'); const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download=`RaviSomaTools_results_${Date.now()}.csv`; a.click();
 });
-$('downloadXLSX').addEventListener('click', ()=>{
-  if(results.length===0) return alert('No results yet'); const wb = XLSX.utils.book_new(); const aoa = [['Gene','UniProt','Ensembl','Entrez','Status']].concat(results.map(r=>[r.Gene,r.UniProt,r.Ensembl,r.Entrez,r.Status])); const ws = XLSX.utils.aoa_to_sheet(aoa); XLSX.utils.book_append_sheet(wb, ws, 'results'); const wbout = XLSX.write(wb,{bookType:'xlsx',type:'array'}); const blob = new Blob([wbout], {type:'application/octet-stream'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`RaviSomaTools_results_${Date.now()}.xlsx`; a.click(); URL.revokeObjectURL(a.href);
+downloadXLSXBtn.addEventListener('click', ()=>{
+  if(results.length===0) return alert('No results yet'); const wb = XLSX.utils.book_new(); const aoa = [['Gene','UniProt','Ensembl','Entrez','Status']].concat(results.map(r=>[r.Gene,r.UniProt,r.Ensembl,r.Entrez,r.Status])); const ws = XLSX.utils.aoa_to_sheet(aoa); XLSX.utils.book_append_sheet(wb, ws, 'results'); const wbout = XLSX.write(wb,{bookType:'xlsx',type:'array'}); const blob = new Blob([wbout], {type:'application/octet-stream'}); const a=document.createElement('a'); a.href = URL.createObjectURL(blob); a.download=`RaviSomaTools_results_${Date.now()}.xlsx`; a.click(); URL.revokeObjectURL(a.href);
 });
 
 // -------------------- Examples UI --------------------
-loadRatBtn.addEventListener('click', ()=>{ genesArea.value = EXAMPLES.rat.join('\n'); speciesEl.value='rat'; log('Loaded rat example (button)'); });
-loadMouseBtn.addEventListener('click', ()=>{ genesArea.value = EXAMPLES.mouse.join('\n'); speciesEl.value='mouse'; log('Loaded mouse example (button)'); });
-loadHumanBtn.addEventListener('click', ()=>{ genesArea.value = EXAMPLES.human.join('\n'); speciesEl.value='human'; log('Loaded human example (button)'); });
-
-useSelectedExample.addEventListener('click', ()=>{ const v = exampleSelect.value; if(!v) return alert('Choose an example from the dropdown'); genesArea.value = EXAMPLES[v].join('\n'); speciesEl.value = v; log(`Loaded ${v} example (dropdown)`); });
-
-useExampleBox.addEventListener('click', ()=>{ genesArea.value = EXAMPLES.rat.join('\n'); speciesEl.value='rat'; log('Loaded rat example (box)'); });
-
-// prepare downloadable example CSV
-downloadExampleCsv.addEventListener('click', (e)=>{ e.preventDefault(); const rows = EXAMPLES.rat.map(g=>`${g}`); const csv = ['Gene'].concat(rows).join('\n'); const blob = new Blob([csv], {type:'text/csv'}); const url = URL.createObjectURL(blob); downloadExampleCsv.href = url; downloadExampleCsv.download = 'RaviSomaTools_example_rat.csv'; downloadExampleCsv.click(); URL.revokeObjectURL(url); });
+useSelectedExample.addEventListener('click', ()=>{
+  const v = exampleSelect.value; if(!v) return alert('Choose an example from the dropdown');
+  genesArea.value = EXAMPLES[v].join('\n'); speciesEl.value = v; log(`Loaded ${v} example (dropdown)`);
+});
 
 // -------------------- Init --------------------
-progressInfo.textContent = 'Ready'; log('RaviSomaTools ready — examples loaded; default species: Rattus norvegicus');
-
+progressInfo.textContent = 'Ready'; log('RaviSomaTools ready — please select species before Start');
 </script>
 </body>
 </html>
